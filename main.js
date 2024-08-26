@@ -39,6 +39,25 @@ const zRes = 3;
 var sortedPairs = sliceMesh(cube, zRes);
 console.log('sorted pairs', sortedPairs);
 
+// ******** determine list of moves ********* //
+
+// let currentPosition = new THREE.Vector3(0,0,0);
+// let listOfMoves = [];
+// for (let i = 0; i < sortedPairs.length; i++) {
+//     console.log('stuff', currentPosition, sortedPairs[i].v0);
+//     if (!currentPosition.equals(sortedPairs[i].v0)) {
+//         listOfMoves.push(new VertexPair(currentPosition, sortedPairs[i].v0))
+//         currentPosition = sortedPairs[i].v0;
+//         // console.log('currentPosition',currentPosition);
+//         console.log('adding point');
+//     }
+//     listOfMoves.push(sortedPairs[i]);
+//     currentPosition = sortedPairs[i].v1;
+//     // console.log('currentPosition',currentPosition);
+// }
+// console.log('list of moves', listOfMoves);
+
+
 // ******** random 3d object ******** //
 
 function createOvalCylinder(radiusX, radiusY, height, segments, color) {
@@ -126,21 +145,32 @@ scene.add(cone);
 //     // Add more objects as needed
 // ];
 
+let currentPosition = new THREE.Vector3(0, 0, 0);
+const listOfMoves = [];
 const arrayOfObjects = [];
+
 for (let i = 0; i < sortedPairs.length; i++) {
-    const singleVertexPair = sortedPairs[i];
-
-    // Create an object with startPosition, endPosition, speed, and fill
-    const obj = {
-        startPosition: singleVertexPair.v0, // Use v0 as startPosition
-        endPosition: singleVertexPair.v1,   // Use v1 as endPosition
-        speed: 200,         // Example: increment speed for each object
-        fill: true                    // Set fill to true
-    };
-
-    // Add the object to the array
-    arrayOfObjects.push(obj);
+    if (!currentPosition.equals(sortedPairs[i].v0)) {
+        // Add the move to listOfMoves and create a corresponding object
+        addMoveAndObject(currentPosition, sortedPairs[i].v0, 50, false);
+        currentPosition = sortedPairs[i].v0;
+    }
+    // Add the sorted pair to listOfMoves and create a corresponding object
+    addMoveAndObject(sortedPairs[i].v0, sortedPairs[i].v1, 200, true);
+    currentPosition = sortedPairs[i].v1;
 }
+
+function addMoveAndObject(start, end, speed, fill) {
+    listOfMoves.push(new VertexPair(start, end));
+    arrayOfObjects.push({
+        startPosition: start,
+        endPosition: end,
+        speed: speed,
+        fill: fill
+    });
+}
+console.log('list of moves', listOfMoves);
+console.log('array of objects', arrayOfObjects);
 
 // Function to create lines for each array
 function createLines(start, stop) {
