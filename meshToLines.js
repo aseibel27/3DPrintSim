@@ -105,6 +105,7 @@ export function sliceMesh(mesh, zRes) {
 
     // Get min and max z values of mesh
     const { minZ, maxZ } = getMinMaxZ(mesh);
+    console.log('minmax',minZ,maxZ);
 
     // For each slice, consider each triangle, find intersecting line segment, and add segment to list. 
     // After going through all triangles, sort the list of segments to construct continuous polygons and combine colinear segments
@@ -125,14 +126,29 @@ export function sliceMesh(mesh, zRes) {
             // add intersecting line segment to list
             planarVertexPairs = addPlanarIntersection(tri, z, intersectType, planarVertexPairs)
         }
+        console.log('sortedPairsLength',sortedPairs.length);
+        let lastPosition;
+        if (sortedPairs.length > 0) {
+            lastPosition = sortedPairs[sortedPairs.length-1].v1;
+        }
+        else {
+            const zero = new THREE.Vector3(0,0,0);
+            lastPosition = zero;
+        }
 
         // sort line segments for current z plane into continuous polygon, combining colinear segments
-        planarVertexPairs = sortVertexPairs(planarVertexPairs);
+        console.log('numPlanarLines',planarVertexPairs.length);
+        planarVertexPairs = sortVertexPairs(planarVertexPairs, lastPosition);
+        console.log('z, num sorted lines', z, planarVertexPairs.length);
 
         // add sorted segments from current z plane to growing list of sorted segments
-        for (let i = 0; i < planarVertexPairs.length; i++) {
-            sortedPairs.push(planarVertexPairs[i]);
+        // console.log('length', planarVertexPairs.length);
+        if (planarVertexPairs.length > 2) { // needs at least 3 for polygon
+            for (let i = 0; i < planarVertexPairs.length; i++) {
+                sortedPairs.push(planarVertexPairs[i]);
+            }
         }
+
     }
 
     return sortedPairs;
@@ -179,7 +195,8 @@ function getMinMaxZ(mesh) {
 }
 
 function extractTrianglesFromGeom(geometry) {
-    const nonIndexedGeometry = geometry.toNonIndexed();
+    // const nonIndexedGeometry = geometry.toNonIndexed();
+    const nonIndexedGeometry = geometry;
     const positionAttr = nonIndexedGeometry.getAttribute('position');
 
     if (!positionAttr) {
@@ -211,18 +228,21 @@ function extractTrianglesFromGeom(geometry) {
     return triangles;
 }
 
-function distanceToOrigin(vertex) {
+function distanceToReference(vertex, reference) {
+    // console.log('vertex',vertex);
+    const distance = vertex.distanceTo(reference);
     return Math.sqrt(vertex.x * vertex.x + vertex.y * vertex.y + vertex.z * vertex.z);
+    // return distance;
 }
 
-function findClosestSegment(vertexPairs) {
+function findClosestSegment(vertexPairs, reference) {
     let minDistance = Infinity;
     let startSegmentIndex = -1;
-    let value = true;
-
+    let value = true; // true if does not need flipped (distA < distB)
+ 
     vertexPairs.forEach((pair, index) => {
-        const distA = distanceToOrigin(pair.v0);
-        const distB = distanceToOrigin(pair.v1);
+        const distA = distanceToReference(pair.v0, reference);
+        const distB = distanceToReference(pair.v1, reference);
 
         if (distA < minDistance || distB < minDistance) {
             minDistance = Math.min(distA, distB);
@@ -234,7 +254,15 @@ function findClosestSegment(vertexPairs) {
     return { index: startSegmentIndex, flip: value };
 }
 
-function sortVertexPairs(vertexPairs) {
+THREE.Vector3.prototype.equalsWithinTolerance = function (other, tolerance = 1e-10) {
+    return (
+        Math.abs(this.x - other.x) < tolerance &&
+        Math.abs(this.y - other.y) < tolerance &&
+        Math.abs(this.z - other.z) < tolerance
+    );
+};
+
+function sortVertexPairs(vertexPairs, lastPair) {
     
     // Helper function to check if three points are collinear
     function areCollinear(segment1, segment2) {
@@ -247,11 +275,14 @@ function sortVertexPairs(vertexPairs) {
             .cross(new THREE.Vector3().subVectors(v4, v3));
         return crossProduct.lengthSq() < 1e-10; // Consider it zero if the cross product is very small
     }
-    
+
+    // const zero = new THREE.Vector3(0,0,0);
+    // let reference = zero;
     const sortedPairs = [];
     
     // Find the starting segment
-    const closestSegmentInfo = findClosestSegment(vertexPairs);
+    console.log('number of vertex pairs',vertexPairs.length);
+    const closestSegmentInfo = findClosestSegment(vertexPairs, lastPair); // get index of vertex closest to origin
     let startIndex = closestSegmentInfo.index;
     let myValue = closestSegmentInfo.flip;
     let firstPair = vertexPairs[startIndex];
@@ -270,16 +301,18 @@ function sortVertexPairs(vertexPairs) {
     
     // Continue sorting the rest of the pairs
     while (vertexPairs.length > 0) {
+        // console.log('vertex, sorted', vertexPairs.length, sortedPairs.length);
         const lastPair = sortedPairs[sortedPairs.length - 1];
         let foundIndex = -1;
 
         for (let i = 0; i < vertexPairs.length; i++) {
             const pair = vertexPairs[i];
 
-            if (lastPair.v1.equals(pair.v0)) {
+            if (lastPair.v1.equalsWithinTolerance(pair.v0)) {
                 foundIndex = i;
                 break;
-            } else if (lastPair.v1.equals(pair.v1)) {
+            } 
+            else if (lastPair.v1.equalsWithinTolerance(pair.v1)) {
                 // Swap vertices if necessary
                 [pair.v0, pair.v1] = [pair.v1, pair.v0];
                 foundIndex = i;
@@ -298,8 +331,21 @@ function sortVertexPairs(vertexPairs) {
             }
         }
         else {
-            console.error("Segments are not properly connected.");
-            break;
+            // console.error("Segments are not properly connected.");
+            console.log("new polygon");
+            const newClosestSegmentInfo = findClosestSegment(vertexPairs, sortedPairs[sortedPairs.length - 1]);
+            let newStartIndex = newClosestSegmentInfo.index;
+            let newValue = closestSegmentInfo.flip;
+            let newFirstPair = vertexPairs[newStartIndex];
+        
+            if (newValue) {
+                sortedPairs.push(vertexPairs[newStartIndex]);
+            }
+            else {
+                [newFirstPair.v0, newFirstPair.v1] = [newFirstPair.v1, newFirstPair.v0];
+                sortedPairs.push(newFirstPair);
+            }
+            // break;
         }
     }
 
