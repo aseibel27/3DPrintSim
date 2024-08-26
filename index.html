@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title>3D Print Simulator</title>
+        <style>
+            body { margin: 0; }
+            #overlayContainer {
+                position: absolute;
+                top: 10px;
+                left: 10px;
+                width: 80px;
+                height: 30px;
+                display: block;
+                z-index: 9999; /* Ensure it's displayed on top */
+
+            }
+            #toggleButton {
+                position: absolute;
+                width: 80px; /* Adjust button width as needed */
+                height: 30px; /* Adjust button height as needed */
+                cursor: pointer;
+                background-color: #ffffff; /* Button background color */
+                border: none;
+                border-radius: 5px;
+                font-size: 14px;
+                color: #000000; /* Button text color */
+            }
+            #overlayScene {
+              width: 100%;
+              height: 100%;
+            }
+        </style>
+        <script type="importmap">
+            {
+              "imports": {
+                "three": "https://unpkg.com/three@v0.162.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@v0.162.0/examples/jsm/"
+              }
+            }
+        </script>
+	</head>
+	<body>
+        <!-- Main scene container -->
+        <div id="mainSceneContainer"></div>
+
+        <!-- Overlay container -->
+        <div id="overlayContainer">
+            <button id="toggleButton">Toggle</button>
+            <div id="overlayScene"></div>
+        </div>    
+        <script type="module" src="/main.js"></script>
+
+	</body>
+</html>
