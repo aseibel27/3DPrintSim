@@ -132,6 +132,7 @@ export function sliceMesh(mesh, zRes) {
             lastPosition = sortedPairs[sortedPairs.length-1].v1;
         }
         else {
+            console.log('sortedPairs has no length');
             const zero = new THREE.Vector3(0,0,0);
             lastPosition = zero;
         }
@@ -230,7 +231,7 @@ function extractTrianglesFromGeom(geometry) {
 
 function distanceToReference(vertex, reference) {
     // console.log('vertex',vertex);
-    const distance = vertex.distanceTo(reference);
+    // const distance = vertex.distanceTo(reference);
     return Math.sqrt(vertex.x * vertex.x + vertex.y * vertex.y + vertex.z * vertex.z);
     // return distance;
 }

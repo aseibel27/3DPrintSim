@@ -3,6 +3,32 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 import { FontLoader } from 'three/addons/loaders/FontLoader.js';
 
+export function loadNozzle(curPosition, height) {
+    // Define the parameters for the cone
+    const radius = 5; // Base radius of the cone
+    // const height = 10; // Height of the cone
+    const radialSegments = 32; // Number of segments around the circumference
+    const heightSegments = 1; // Number of segments along the height
+    const openEnded = false; // Whether the cone is open-ended
+
+    // Define the position for the cone
+    const position = new THREE.Vector3(curPosition.x+0.2, curPosition.y+0.2, curPosition.z+0.2+height/2);
+
+    // Create the geometry for the cone
+    const coneGeometry = new THREE.ConeGeometry(radius, height, radialSegments, heightSegments, openEnded).rotateX(-Math.PI/2);
+
+    // Create a material for the cone
+    const coneMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff , transparent: true, opacity: 0.3 }); // Set the color as desired
+
+    // Create the mesh for the cone
+    const cone = new THREE.Mesh(coneGeometry, coneMaterial);
+
+    // Position the cone at the specified coordinates
+    cone.position.copy(position);
+
+    return cone;
+}
+
 export function setupMainScene() {
     // Set up the scene, camera, and renderer
     const scene = new THREE.Scene();

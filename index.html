@@ -5,6 +5,121 @@
 		<title>3D Print Simulator</title>
         <style>
             body { margin: 0; }
+            #colorSelector {
+                position: absolute;
+                top: 0px;
+                left: 80px;
+                width: 100px;
+                height: 18px;
+                padding: 0px;
+                font-size: 14px;
+                border-radius: 5px;
+                border: 1px solid #ccc;
+            }
+            #fileSelector {
+                position: absolute;
+                top: 0px;
+                left: 40px;
+                width: 120px;
+                height: 18px;
+                padding: 0px;
+                font-size: 14px;
+                border-radius: 5px;
+                border: 1px solid #ccc;
+            }
+            #selectedColorDisplay {
+                position: absolute;
+                top: 0px;
+                left: 180px;
+                width: 16px;
+                height: 16px;
+                margin-top: 0px;
+                margin-left: 5px;
+                border: 1px solid #ccc;
+            }
+            #topRowContainer {
+                position: absolute;
+                top: 10px;
+                left: 450px;
+                display: block;
+                align-items: center;
+                justify-content: space-between;
+                z-index: 9999; /* Ensure it's displayed on top */
+                /* background-color: rgba(0, 0, 0, 1); 
+                border: 2px solid rgba(255, 255, 255, 1);  */
+
+            }
+            #topLeftContainer {
+                position: absolute;
+                top: 0px;
+                left: 230px;
+                width: 200px;
+                display: block;
+                align-items: center;
+                justify-content: space-between;
+                z-index: 9999; /* Ensure it's displayed on top */
+            }
+            #topLeftContainer2 {
+                position: absolute;
+                top: -16px;
+                left: 400px;
+                width: 150px;
+                display: block;
+                align-items: center;
+                justify-content: space-between;
+                z-index: 9999; /* Ensure it's displayed on top */
+            }
+            #topRightContainer {
+                position: absolute;
+                top: 0px;
+                left: 600px;
+                width: 200px;
+                display: block;
+                align-items: center;
+                justify-content: space-between;
+                z-index: 9999; /* Ensure it's displayed on top */
+            }
+            textarea {
+                width: 300px;
+                resize: vertical;
+                max-height: 700px;
+                min-height: 100px;
+                margin-top: 10px;
+                overflow-y: auto;
+                background-color: rgba(255, 255, 255, 0.8);
+            }
+            #colorContainer {
+                position: absolute;
+                top: 10px;
+                left: 450px;
+                display: block;
+                align-items: center;
+                justify-content: space-between;
+                z-index: 9999; /* Ensure it's displayed on top */
+            }
+            #fileContainer {
+                position: absolute;
+                top: 40px;
+                left: 450px;
+                display: block;
+                align-items: center;
+                justify-content: space-between;
+                z-index: 9999; /* Ensure it's displayed on top */
+            }
+            #loadFile {
+                position: absolute;
+                left: 160px;
+            }
+            #buttonContainer {
+                position: absolute;
+                top: 80px;
+                left: 500px;
+                width: 160px;
+                display: block;
+                align-items: center;
+                justify-content: space-between;
+                z-index: 9999;
+            }
             #overlayContainer {
                 position: absolute;
                 top: 10px;
@@ -29,6 +144,8 @@
             #overlayScene {
               width: 100%;
               height: 100%;
+              
+
             }
         </style>
         <script type="importmap">
@@ -41,14 +158,104 @@
         </script>
 	</head>
 	<body>
+            <!-- Top row container -->
+        <div id="topRowContainer">
+            <div id="topLeftContainer">
+                <div>
+                    <label for="printSpeedInput" style="color: white;">Print speed:</label>
+                    <input type="number" id="printSpeedInput" placeholder="0" width="30px" style="margin-left: 10px; width: 50px; text-align: right;">
+                </div>
+                <div style="margin-top: 10px">
+                    <label for="moveSpeedInput" style="color: white;">Move speed:</label>
+                    <input type="number" id="moveSpeedInput" placeholder="0" width="30px" style="margin-left: 10px; width: 50px; text-align: right;">      
+                </div>
+                <div style="margin-top: 10px">
+                    <label for="nozzleDiameter" style="color: white;">Nozzle diam:</label>
+                    <input type="number" id="nozzleDiameter" placeholder="0" width="30px" style="margin-left: 10px; width: 50px; text-align: right;">      
+                </div>
+                <div style="margin-top: 10px">
+                    <label for="layerHeight" style="color: white;">Layer height:</label>
+                    <input type="number" id="layerHeight" placeholder="0" width="30px" style="margin-left: 10px; width: 50px; text-align: right;">      
+                </div>
+                <div style="margin-top: 10px">
+                    <label for="zRes" style="color: white;">Z resolution:</label>
+                    <input type="number" id="zRes" placeholder="0" width="30px" style="margin-left: 10px; width: 50px; text-align: right;">      
+                </div>
+            </div>
+            <div id="topLeftContainer2">
+                <div>
+                    <p style="color: white;">Current layer: <span id="currentLayerDisplay"></span></p>
+                </div>                
+                <div>
+                    <p style="color: white;">Current move: <span id="currentMoveDisplay"></span></p>
+                </div>                
+                <div>
+                    <p style="color: white;">Total extruded: <span id="extrusionCounterDisplay"></span></p>
+                </div>
+                <div>
+                    <p style="color: white;">Nozzle location: X<span id="nozzleX"></span> Y<span id="nozzleY"></span> Z<span id="nozzleZ"></span></p>            
+                </div>
+            </div>
+            <div id="topRightContainer">
+                <label for="gcode" style="color: white;">G-code:</label>
+                <textarea id="gCode" rows="5"></textarea>
+            </div>
+        </div>
+        <div id="buttonContainer">
+            <button id="newGCode">Generate G-code</button>
+            <button id="resetPrint">Reset Print</button>
+            <button id="startPrint">Start Print</button>
+            <button id="pausePrint">Pause Print</button>
+        </div>
+
+        <div id="colorContainer">
+             <!-- Dropdown Menu for Color Selection -->
+            <label for="colorSelector" style="color: white;">Print color:</label>
+            <select id="colorSelector">
+                <option value="#ffffff">White</option>
+                <option value="#ff0000">Red</option>
+                <option value="#00ff00">Green</option>
+                <option value="#0000ff">Blue</option>
+                <option value="#ffff00">Yellow</option>
+                <option value="#ff00ff">Magenta</option>
+                <option value="#00ffff">Cyan</option>
+            </select>
+
+            <!-- Div to Display the Selected Color -->
+            <div id="selectedColorDisplay"></div>
+        </div>
+
+        <div id="fileContainer">
+            <!-- Dropdown Menu for Color Selection -->
+           <label for="fileSelector" style="color: white;">File:</label>
+           <select id="fileSelector">
+               <option value="">--Select File--</option>
+               <option value="XYZcube.stl">Cube</option>
+               <option value="Rose.stl">Rose</option>
+
+           </select>
+           <button id="loadFile">Load</button>
+
+           <!-- Div to Display the Selected Color -->
+           <!-- <div id="selectedColorDisplay"></div> -->
+       </div>
+
+
         <!-- Main scene container -->
-        <div id="mainSceneContainer"></div>
+        <div id="mainSceneContainer">
+            <!-- UI -->
+            <!-- <p style="color: white">Print speed: <input type="number" id="printSpeedInput"></p>     -->
+        </div>
 
         <!-- Overlay container -->
         <div id="overlayContainer">
             <button id="toggleButton">Toggle</button>
             <div id="overlayScene"></div>
         </div>    
+
+        <!-- UI -->
+        <!-- <p style="color: white">Print speed: <input type="number" id="printSpeedInput"></p> -->
+
         <script type="module" src="/main.js"></script>
 
 	</body>
