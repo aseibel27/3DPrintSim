@@ -12,24 +12,12 @@ document.getElementById('startPrint').addEventListener('click', startPrint);
 document.getElementById('startPrint').addEventListener('click', pausePrint);
 
 // Add event listeners for update fields
+document.getElementById('colorSelector').addEventListener('input', updatePrintColor);
 document.getElementById('moveSpeedInput').addEventListener('input', updateMoveSpeed);
 document.getElementById('printSpeedInput').addEventListener('input', updatePrintSpeed);
 document.getElementById('nozzleDiameter').addEventListener('input', updateNozzleDiameter);
 document.getElementById('layerHeight').addEventListener('input', updateLayerHeight);
 document.getElementById('zRes').addEventListener('input', updateZResolution);
-
-// JavaScript to Handle Color Selection
-const colorSelector = document.getElementById('colorSelector');
-const colorDisplay = document.getElementById('selectedColorDisplay');
-colorDisplay.style.backgroundColor = colorSelector.value;
-
-colorSelector.addEventListener('change', function() {
-    const selectedColor = this.value;
-    colorDisplay.style.backgroundColor = selectedColor;
-
-    // Optional: Log the selected color to the console
-    console.log('Selected color:', selectedColor);
-});
 
 // Initialize global variables;
 var printColor = "#FF0000"; //red
@@ -41,14 +29,34 @@ var nozzleDiam = 0.4;
 var layerHeight = 0.2;
 var zRes = 3;
 
-var curLayer;
+var curLayer = 0;
+var curLayerStep = 0;
 var curMove = 0;
-var curExtruded = 0;
+var curPrintDistance = 0
+var filamentDiameter = 1.75;
+var filamentCrossArea = Math.PI * filamentDiameter*filamentDiameter/4;
+var extrudedCrossArea = nozzleDiam*layerHeight;
+var curExtruded = Number(0).toFixed(5);
 var curPosition = new THREE.Vector3(0,0,0);
+var curSpeed = 0;
+
+var myMesh;
+var sortedPairs;
+var arrayOfObjects = [];
+
+var stopAnimation = false;
+var isPrinting = false;
+
+// Initialize G-code text
+var gCodeArray = [';G-code:\n'];
+var textAreaContent = ';G-code:\n';
 
 // Call setupMainScene can setupOverlayScene to initialize the scene and overlay scene
 const { scene, camera, renderer, controls } = setupMainScene();
 const { overlayScene, overlayCamera, overlayRenderer, overlayControls, overlayGridHelper } = setupOverlayScene();
+const nozzleHeight = 10;
+const cone = loadNozzle(curPosition, nozzleHeight); 
+scene.add(cone);   
 
 // Update UI fields
 document.getElementById('colorSelector').selectedIndex = 1; // 1st index is red
@@ -66,57 +74,83 @@ document.getElementById('nozzleY').textContent = curPosition.y.toFixed(3);
 document.getElementById('nozzleZ').textContent = curPosition.z.toFixed(3);
 
 async function mainFunction() {
-    // Load nozzle onto scene
-    const nozzleHeight = 10;
-    let cone = loadNozzle(curPosition, nozzleHeight); 
-    scene.add(cone);   
-    
+ 
     // Load mesh from file
-    let myMesh = await loadFile('XYZcube.stl');
+    myMesh = await loadFile('XYZcube.stl');
 
-    // Convert mesh to list of line segments
-    var sortedPairs = sliceMesh(myMesh, zRes);
-    console.log('sorted pairs', sortedPairs);
 
-    // Convert line of segments into list of moves
+
+    function animateScene() { 
+        requestAnimationFrame( animateScene );
+        renderer.render( scene, camera );
+        overlayRenderer.render(overlayScene, overlayCamera);
+        controls.update();
+        overlayControls.update();
+    }
+
+    // Start animations
+    animateScene();
+    // continuePrint(0);
+
+}
+mainFunction();
+
+function determineMoves(sortedPairs) {
+       
     const listOfMoves = [];
-    const arrayOfObjects = [];
+    let theorCurPrintDist = 0;
+    let theorTotalPrintDist = 0;
+    // const arrayOfObjects = [];
+    console.log('movespeed',moveSpeed);
+    console.log('printSpeed',printSpeed);
     for (let i = 0; i < sortedPairs.length; i++) {
         if (!curPosition.equals(sortedPairs[i].v0)) {
             // Add the move to listOfMoves and create a corresponding object
-            addMoveAndObject(curPosition, sortedPairs[i].v0, 500, false);
+            addMoveAndObject(curPosition, sortedPairs[i].v0, moveSpeed, false);
             curPosition = sortedPairs[i].v0;
+            console.log('move');
         }
+        // Calculate amount extruded
+        let tempStart = sortedPairs[i].v0.clone();
+        let tempEnd = sortedPairs[i].v1.clone();
+        theorCurPrintDist = tempStart.distanceTo(tempEnd);
+        theorTotalPrintDist += theorCurPrintDist;
+        let theorExtruded = theorTotalPrintDist * extrudedCrossArea / filamentCrossArea;
+
         // Add the sorted pair to listOfMoves and create a corresponding object
-        addMoveAndObject(sortedPairs[i].v0, sortedPairs[i].v1, 500, true);
+        addMoveAndObject(sortedPairs[i].v0, sortedPairs[i].v1, printSpeed, true, theorExtruded);
         curPosition = sortedPairs[i].v1;
+        console.log('print');
     }
 
-    function addMoveAndObject(start, end, speed, fill) {
+    function addMoveAndObject(start, end, speed, fill, extruded) {
         listOfMoves.push(new VertexPair(start, end));
         arrayOfObjects.push({
             startPosition: start,
             endPosition: end,
             speed: speed,
-            fill: fill
+            fill: fill,
+            extruded: extruded
         });
     }
     console.log('list of moves', listOfMoves);
     console.log('array of objects', arrayOfObjects);
+}
 
-    var stopAnimation = false;
+// Print animation loop
+function continuePrint(row) {
 
-    // Print animation loop
-    function continuePrint(row) {
+    // Calculate the distance and velocity
+    // gCodeToArray(); //update arrayOfObjects
+    const currentArray = arrayOfObjects[row];
+    const startPosition = currentArray.startPosition;
+    const endPosition = currentArray.endPosition;
+    if(!startPosition.equals(endPosition)) {
 
-        // Calculate the distance and velocity
-        const currentArray = arrayOfObjects[row];
-        const startPosition = currentArray.startPosition;
-        const endPosition = currentArray.endPosition;
-        const speed = currentArray.speed;
+        curSpeed = currentArray.speed;
         const fill = currentArray.fill;
         const fps = 60;
-        const frameSpeed = speed/fps;
+        const frameSpeed = curSpeed/fps;
         const moveVector = new THREE.Vector3().subVectors(endPosition, startPosition);
         const distanceTotal = startPosition.distanceTo(endPosition);
         const expectedFrames = distanceTotal/frameSpeed;
@@ -140,6 +174,7 @@ async function mainFunction() {
             // Update the position of the cone by adding the change
             frame++;
             // console.log(cone.position);
+            let prevPosition = cone.position.clone();
             cone.translateX(moveVector.x/expectedFrames);
             cone.translateY(moveVector.y/expectedFrames); 
             cone.translateZ(moveVector.z/expectedFrames);// Move the x and y positions by the speeds
@@ -149,7 +184,20 @@ async function mainFunction() {
                 stopAnimation = true; 
             }
 
+            let curPosition = cone.position.clone();
+
+            let distanceTraveled = prevPosition.distanceTo(curPosition);
+            if (fill) {
+                curPrintDistance += distanceTraveled;
+                curExtruded = (curPrintDistance * extrudedCrossArea / filamentCrossArea).toFixed(5);
+                document.getElementById('extrusionCounterDisplay').textContent = curExtruded;
+            }
+            document.getElementById('nozzleX').textContent = curPosition.x.toFixed(3);
+            document.getElementById('nozzleY').textContent = curPosition.y.toFixed(3);
+            document.getElementById('nozzleZ').textContent = (curPosition.z-nozzleHeight/2).toFixed(3);
+
             if (fill) { // If fill, draw a cylinder
+                        
                 let startPrintPosition = new THREE.Vector3().subVectors(startPosition, new THREE.Vector3(0,0,layerHeight/2));
                 let endPrintPosition = new THREE.Vector3().subVectors(cone.position, new THREE.Vector3(0,0,nozzleHeight/2+layerHeight/2));
                 let midpoint = new THREE.Vector3().addVectors(startPrintPosition, endPrintPosition).multiplyScalar(0.5);
@@ -159,11 +207,11 @@ async function mainFunction() {
 
                 // Create a new cylinder geometry with the same radius and the new length
                 cylinder.geometry.dispose();   
-                const newGeometry = new THREE.CylinderGeometry(printRadius, printRadius, distancePartial, 32);
+                const newGeometry = new THREE.CylinderGeometry(printRadius, printRadius, distancePartial, 6);
                 cylinder.geometry = newGeometry;
 
                 // Create a new cylinder geometry with the same radius and the new length
-                updateOvalCylinderGeometry(ovalCylinder, nozzleDiam, layerHeight, distancePartial, 32);
+                updateOvalCylinderGeometry(ovalCylinder, nozzleDiam, layerHeight, distancePartial, 6);
                 
                 // Position and orient the cylinder
                 cylinder.position.copy(midpoint);
@@ -177,9 +225,14 @@ async function mainFunction() {
 
             if (stopAnimation) { // Current move is finished, start next move
                 stopAnimation = false;
-                row++;         
+                row++;
+                document.getElementById('currentMoveDisplay').textContent = row;         
                 if (row < arrayOfObjects.length) {
                     continuePrint(row);
+                }
+                else {
+                    // isPrinting = false;
+                    console.log("Print finished");
                 }
             }
             else {
@@ -187,24 +240,13 @@ async function mainFunction() {
             }
 
         }
-
         updatePrintAnimation();
     }
-
-    function animateScene() { 
-        requestAnimationFrame( animateScene );
-        renderer.render( scene, camera );
-        overlayRenderer.render(overlayScene, overlayCamera);
-        controls.update();
-        overlayControls.update();
+    else {
+        row++;
+        continuePrint(row);
     }
-
-    // Start animations
-    animateScene();
-    continuePrint(0);
-
 }
-mainFunction();
 
 function createOvalCylinder(radiusX, radiusY, height, segments, color) {
     // Create a custom shape for the oval cross-section
@@ -254,8 +296,19 @@ function updateOvalCylinderGeometry(mesh, radiusX, radiusY, height, segments) {
 }
 
 // Function to handle button click event
-async function loadFile(filePath) {
+async function loadFile() {
+    // Load mesh from file
+    stlFile = document.getElementById('fileSelector').value;
+    if(stlFile) {
+        myMesh = await loadSTLFile(stlFile);
+    }
+    else {
+        console.log('no STL file selected',stlFile);
+    }
     
+}
+
+async function loadSTLFile (filePath) {
     // helper function to center mesh on grid
     function centerObject(mesh, overlayGridHelper) {
         // Calculate the bounding box of the loaded geometry
@@ -273,7 +326,7 @@ async function loadFile(filePath) {
         mesh.position.set(offsetX, offsetY, offsetZ);
     }
 
-    document.getElementById('loadFile').value = filePath;
+    // document.getElementById('loadFile').value = filePath;
     const loader = new STLLoader();
     try {
         // Wait for the STL file to be fully loaded
@@ -294,27 +347,44 @@ async function loadFile(filePath) {
         console.error('Error loading STL file:', error);
         throw error;
     }
-
-
 }
 
 function newGCodeClick() {
-    // gCodeArray = [';G-code:\n'];
-    // generateGCode(drawingMat);
+    // Convert mesh to list of line segments
+    sortedPairs = sliceMesh(myMesh, zRes);
+    console.log('sorted pairs', sortedPairs);
+
+    // Determine moves
+    determineMoves(sortedPairs);
+    console.log("Starting print");
+            
+    gCodeArray = [';G-code:\n'];
+    generateGCode();
 }
 
-async function resetPrint() {
-    // resetFlag = true;
-    // extrusionCounter = 0;
-    // document.getElementById('extrusionCounterDisplay').textContent = extrusionCounter.toFixed(2);
-    // await delay(100);
-    // printedMat = generateEmptyMatrix(matrixSizeX, matrixSizeY);
-    // drawGrid(ctx2, printedMat, squareSize, "white", "black");
-    // ctx2.drawImage(img, margin + nozzleLocation[0]-nozzleSizeX/2, margin + 400 - nozzleLocation[1]-nozzleSizeY-squareSize, nozzleSizeX, nozzleSizeY); // Specify the position and size of the image
+function resetPrint() {
+    stopAnimation = true;
+    curMove=0;
+    isPrinting = false; 
+    removeAllMeshes(scene);
+    curPrintDistance = 0;
+    curExtruded = 0;
+    document.getElementById('extrusionCounterDisplay').textContent = Number(curExtruded).toFixed(5);
+    // listOfMoves = [];
+    sortedPairs =[];
+    arrayOfObjects = [];
 }
 
 async function startPrint() {
-    // printError("Starting print");
+    curPosition = new THREE.Vector3(0,0,0); // TODO remove
+    
+    if(!isPrinting) {
+        // Start print
+        gCodeToArray();
+        continuePrint(curMove);
+        isPrinting = true;
+    }
+
     // resetFlag = true;
     // extrusionCounter = 0;
     // document.getElementById('extrusionCounterDisplay').textContent = extrusionCounter.toFixed(2);
@@ -337,22 +407,156 @@ function pausePrint() {
 
 }
 
-function updateMoveSpeed() {
+function updatePrintColor() {
+    const colorSelector = document.getElementById('colorSelector');
+    const colorDisplay = document.getElementById('selectedColorDisplay');
+    colorDisplay.style.backgroundColor = colorSelector.value;
+    printColor = colorSelector.value;
+}
 
+function updateMoveSpeed() {
+    moveSpeed = document.getElementById('moveSpeedInput').value;
 }
 
 function updatePrintSpeed() {
-
+    printSpeed = document.getElementById('printSpeedInput').value;
 }
 
 function updateNozzleDiameter() {
-
+    nozzleDiam = document.getElementById('nozzleDiameter').value;
 }
 
 function updateLayerHeight() {
-
+    layerHeight = document.getElementById('layerHeight').value;
 }
 
 function updateZResolution() {
+    zRes = Number(document.getElementById('zRes').value);
+}
 
+function removeAllMeshes(scene) {
+    // Loop through the scene's children in reverse order (stop at 6 to keep X, Y, Z and nozzle in scene)
+    for (let i = scene.children.length - 1; i >= 6; i--) { 
+        let child = scene.children[i];
+        if (child.isMesh) {
+            scene.remove(child);
+        }
+    }
+}
+
+function generateGCode() {
+
+    function printGCode() {
+        // Join the array elements into a single string separated by newlines
+        textAreaContent = gCodeArray.join('');
+        // Set the value of the textarea to the content
+        document.getElementById('gCode').value = textAreaContent;
+    }
+    printGCode();
+
+    function newGCode(nextXCoord, nextYCoord, nextZCoord, speed, fill, totalExtruded) {
+        let code = '';
+        let new_text = '';
+        if (!fill) { // if no fill, set code G0 and move faster
+            code = 'G0';
+            new_text = code + ' X' + nextXCoord.toFixed(3) + ' Y' + nextYCoord.toFixed(3) + ' Z' + nextZCoord.toFixed(3) + ' F' + speed + '\n';
+        }
+        else { // if fill, set code G1 and move slower
+            code = 'G1';
+            new_text = code + ' X' + nextXCoord.toFixed(3) + ' Y' + nextYCoord.toFixed(3) + ' Z' + nextZCoord.toFixed(3) + ' F' + speed + ' E' + totalExtruded.toFixed(5) + '\n';
+        }
+        return new_text;
+    }
+
+    // Iterate through each row of matrix until next black or white square
+    let currentArray;
+    for (let i = 0; i < arrayOfObjects.length; i++) {
+        currentArray = arrayOfObjects[i];
+        gCodeArray[i+1] = newGCode(currentArray.endPosition.x, currentArray.endPosition.y, currentArray.endPosition.z, currentArray.speed, currentArray.fill, currentArray.extruded);
+    }   
+    printGCode();
+}
+
+function gCodeToArray() {
+    textAreaContent = document.getElementById('gCode').value;
+    gCodeArray = textAreaContent.split(/(?<=[\n])/g);
+    arrayOfObjects = [];
+    for (let i=0; i<gCodeArray.length; i++) {
+        let gCodeLine = gCodeArray[i];
+        handleGCode(gCodeLine);
+    }
+    console.log('arrayofobjects',arrayOfObjects)
+}
+
+function handleGCode(code) {
+    // Read current line of G-code, updates gFill, gX, gY, gF, and gE accordingly
+    let array;
+    let lastPosition = new THREE.Vector3(0,0,0);
+    if (arrayOfObjects.length > 0) {
+        lastPosition = arrayOfObjects[arrayOfObjects.length-1].endPosition;
+    }
+    let gx = lastPosition.x;
+    let gy = lastPosition.y;
+    let gz = lastPosition.z;
+    let gF = curSpeed;
+    let gE = curExtruded;
+    let gFill = false;
+    let valid = false;
+    let char = '';
+    let word = '';
+    for (let i = 0; i < code.length; i++) {
+        char = code[i];
+        if (char != ' ' && char != '\n') { //
+            word += char;
+        }
+        else if (char == '\n') { // exit for loop
+            i = code.length;
+        }
+        if (char == ' ' || char == '\n') {
+            let key = word[0]; 
+            let value = parseFloat(word.slice(1)); // value is number after 'key'
+            console.log('word', word);
+            switch(key) {
+                case 'G':
+                    if (value == 0) {
+                    gFill = false;
+                    valid = true;
+                    }
+                    else if (value == 1) {
+                    gFill = true;
+                    valid = true;
+                    }                 
+                    break;
+                case 'X':
+                    gx = value;
+                    break;
+                case 'Y':
+                    gy = value;
+                    break;
+                case 'Z':
+                    gz = value;
+                    break;
+                case 'F':
+                    gF = value;
+                    break;
+                case 'E':
+                    gE = value;
+                    break;
+                default:
+                    console.log("Invalid G-code\n");
+            }
+            word = '';
+        }
+    }
+    array = {
+        startPosition: lastPosition,
+        endPosition: new THREE.Vector3(gx,gy,gz),
+        speed: gF,
+        fill: gFill,
+        extruded: gE
+    };
+
+    if(valid) {
+        arrayOfObjects.push(array);
+    }    
 }

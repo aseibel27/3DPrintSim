@@ -110,9 +110,14 @@ export function sliceMesh(mesh, zRes) {
     // For each slice, consider each triangle, find intersecting line segment, and add segment to list. 
     // After going through all triangles, sort the list of segments to construct continuous polygons and combine colinear segments
     var sortedPairs = [];
-    for (let z = minZ; z <= maxZ; z += zRes) {
+    let z = 0.0;
+    for (z = minZ; z <= maxZ; z += zRes) {
         //  initialize array to store line segments from current plane
         var planarVertexPairs = [];
+        console.log('minZ:',minZ);
+        console.log('maxZ:',maxZ);
+        console.log('slice zRes:', zRes)
+        console.log('z',z);
 
         // iterate through each triangle
         for (let i = 0; i < triangles.length; i++){
