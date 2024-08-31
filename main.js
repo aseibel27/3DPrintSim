@@ -100,14 +100,15 @@ function determineMoves(sortedPairs) {
     const listOfMoves = [];
     let theorCurPrintDist = 0;
     let theorTotalPrintDist = 0;
+    let theorCurPosition = curPosition.clone();
     // const arrayOfObjects = [];
     console.log('movespeed',moveSpeed);
     console.log('printSpeed',printSpeed);
     for (let i = 0; i < sortedPairs.length; i++) {
-        if (!curPosition.equals(sortedPairs[i].v0)) {
+        if (!theorCurPosition.equals(sortedPairs[i].v0)) {
             // Add the move to listOfMoves and create a corresponding object
-            addMoveAndObject(curPosition, sortedPairs[i].v0, moveSpeed, false);
-            curPosition = sortedPairs[i].v0;
+            addMoveAndObject(theorCurPosition, sortedPairs[i].v0, moveSpeed, false);
+            theorCurPosition = sortedPairs[i].v0;
             console.log('move');
         }
         // Calculate amount extruded
@@ -119,7 +120,7 @@ function determineMoves(sortedPairs) {
 
         // Add the sorted pair to listOfMoves and create a corresponding object
         addMoveAndObject(sortedPairs[i].v0, sortedPairs[i].v1, printSpeed, true, theorExtruded);
-        curPosition = sortedPairs[i].v1;
+        theorCurPosition = sortedPairs[i].v1;
         console.log('print');
     }
 
@@ -140,6 +141,7 @@ function determineMoves(sortedPairs) {
 // Print animation loop
 function continuePrint(row) {
 
+    stopAnimation = false;    
     // Calculate the distance and velocity
     // gCodeToArray(); //update arrayOfObjects
     const currentArray = arrayOfObjects[row];
@@ -174,9 +176,10 @@ function continuePrint(row) {
             // Update the position of the cone by adding the change
             frame++;
             // console.log(cone.position);
-            let prevPosition = cone.position.clone();
+            let prevPosition = new THREE.Vector3(cone.position.x,cone.position.y,cone.position.z-nozzleHeight/2);
             cone.translateX(moveVector.x/expectedFrames);
-            cone.translateY(moveVector.y/expectedFrames); 
+            cone.translateY(moveVector.y/expectedFrames);
+            // console.log('moveZ',moveVector.z); 
             cone.translateZ(moveVector.z/expectedFrames);// Move the x and y positions by the speeds
 
             if (frame > expectedFrames) {
@@ -184,7 +187,7 @@ function continuePrint(row) {
                 stopAnimation = true; 
             }
 
-            let curPosition = cone.position.clone();
+            let curPosition = new THREE.Vector3(cone.position.x,cone.position.y,cone.position.z-nozzleHeight/2);
 
             let distanceTraveled = prevPosition.distanceTo(curPosition);
             if (fill) {
@@ -194,7 +197,7 @@ function continuePrint(row) {
             }
             document.getElementById('nozzleX').textContent = curPosition.x.toFixed(3);
             document.getElementById('nozzleY').textContent = curPosition.y.toFixed(3);
-            document.getElementById('nozzleZ').textContent = (curPosition.z-nozzleHeight/2).toFixed(3);
+            document.getElementById('nozzleZ').textContent = curPosition.z.toFixed(3);
 
             if (fill) { // If fill, draw a cylinder
                         
@@ -371,12 +374,12 @@ function resetPrint() {
     curExtruded = 0;
     document.getElementById('extrusionCounterDisplay').textContent = Number(curExtruded).toFixed(5);
     // listOfMoves = [];
-    sortedPairs =[];
+    sortedPairs = [];
     arrayOfObjects = [];
 }
 
 async function startPrint() {
-    curPosition = new THREE.Vector3(0,0,0); // TODO remove
+    // curPosition = new THREE.Vector3(0,0,0); // TODO remove
     
     if(!isPrinting) {
         // Start print
@@ -491,9 +494,14 @@ function gCodeToArray() {
 function handleGCode(code) {
     // Read current line of G-code, updates gFill, gX, gY, gF, and gE accordingly
     let array;
-    let lastPosition = new THREE.Vector3(0,0,0);
+    // let lastPosition = new THREE.Vector3(0,0,0);
+    // let lastPosition = curPosition;
+    let lastPosition = new THREE.Vector3(cone.position.x,cone.position.y,cone.position.z-nozzleHeight/2);
     if (arrayOfObjects.length > 0) {
         lastPosition = arrayOfObjects[arrayOfObjects.length-1].endPosition;
+    }
+    else {
+        console.log('curPosition',lastPosition);
     }
     let gx = lastPosition.x;
     let gy = lastPosition.y;
@@ -515,7 +523,7 @@ function handleGCode(code) {
         if (char == ' ' || char == '\n') {
             let key = word[0]; 
             let value = parseFloat(word.slice(1)); // value is number after 'key'
-            console.log('word', word);
+            // console.log('word', word);
             switch(key) {
                 case 'G':
                     if (value == 0) {

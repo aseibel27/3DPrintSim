@@ -12,7 +12,8 @@ export function loadNozzle(curPosition, height) {
     const openEnded = false; // Whether the cone is open-ended
 
     // Define the position for the cone
-    const position = new THREE.Vector3(curPosition.x+0.2, curPosition.y+0.2, curPosition.z+0.2+height/2);
+    // const position = new THREE.Vector3(curPosition.x+0.2, curPosition.y+0.2, curPosition.z+0.2+height/2);
+    const position = new THREE.Vector3(curPosition.x, curPosition.y, curPosition.z+height/2);
 
     // Create the geometry for the cone
     const coneGeometry = new THREE.ConeGeometry(radius, height, radialSegments, heightSegments, openEnded).rotateX(-Math.PI/2);
