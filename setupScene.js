@@ -36,6 +36,7 @@ export function setupMainScene() {
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
     document.getElementById('mainSceneContainer').appendChild(renderer.domElement);
 
     // Position the camera
@@ -88,6 +89,7 @@ export function setupOverlayScene() {
     const overlayCamera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     const overlayRenderer = new THREE.WebGLRenderer();
     overlayRenderer.setSize(window.innerWidth*0.3, window.innerHeight*0.3);
+    overlayRenderer.shadowMap.enabled = true;
     document.getElementById('overlayScene').appendChild(overlayRenderer.domElement);
 
     // Toggle visibility of the overlay scene when a toggle button is clicked
@@ -109,6 +111,20 @@ export function setupOverlayScene() {
     overlayCamera.position.x = 110;
     overlayCamera.position.y = -110;
     overlayCamera.position.z = 220;
+
+    // Add light source
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+    directionalLight.position.set(5, 10, 100); // Set position of light
+    directionalLight.castShadow = true;
+    overlayScene.add(directionalLight);
+
+    // Create a target object and position it at (110, 110, 0)
+    const targetObject = new THREE.Object3D();
+    targetObject.position.set(110, 110, 0);
+    overlayScene.add(targetObject);
+
+    // Point the light toward the target object
+    directionalLight.target = targetObject;
     
     // Add OrbitControls
     const overlayControls = new OrbitControls( overlayCamera, overlayRenderer.domElement );

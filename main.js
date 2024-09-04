@@ -9,7 +9,7 @@ document.getElementById('loadFile').addEventListener('click', loadFile);
 document.getElementById('newGCode').addEventListener('click', newGCodeClick);
 document.getElementById('resetPrint').addEventListener('click', resetPrint);
 document.getElementById('startPrint').addEventListener('click', startPrint);
-document.getElementById('startPrint').addEventListener('click', pausePrint);
+document.getElementById('pausePrint').addEventListener('click', pausePrint);
 
 // Add event listeners for update fields
 document.getElementById('colorSelector').addEventListener('input', updatePrintColor);
@@ -46,6 +46,7 @@ var arrayOfObjects = [];
 
 var stopAnimation = false;
 var isPrinting = false;
+var isPaused = false;
 
 // Initialize G-code text
 var gCodeArray = [';G-code:\n'];
@@ -139,12 +140,12 @@ function determineMoves(sortedPairs) {
 }
 
 // Print animation loop
-function continuePrint(row) {
+function continuePrint() {
 
     stopAnimation = false;    
     // Calculate the distance and velocity
     // gCodeToArray(); //update arrayOfObjects
-    const currentArray = arrayOfObjects[row];
+    const currentArray = arrayOfObjects[curMove];
     const startPosition = currentArray.startPosition;
     const endPosition = currentArray.endPosition;
     if(!startPosition.equals(endPosition)) {
@@ -198,6 +199,8 @@ function continuePrint(row) {
             document.getElementById('nozzleX').textContent = curPosition.x.toFixed(3);
             document.getElementById('nozzleY').textContent = curPosition.y.toFixed(3);
             document.getElementById('nozzleZ').textContent = curPosition.z.toFixed(3);
+            curLayer = curPosition.z/zRes+1;
+            document.getElementById('currentLayerDisplay').textContent = curLayer.toFixed(0);
 
             if (fill) { // If fill, draw a cylinder
                         
@@ -228,15 +231,19 @@ function continuePrint(row) {
 
             if (stopAnimation) { // Current move is finished, start next move
                 stopAnimation = false;
-                row++;
-                document.getElementById('currentMoveDisplay').textContent = row;         
-                if (row < arrayOfObjects.length) {
-                    continuePrint(row);
-                }
-                else {
-                    // isPrinting = false;
-                    console.log("Print finished");
-                }
+                curMove++;
+                document.getElementById('currentMoveDisplay').textContent = (curMove+1);
+                console.log(isPaused);
+                if(!isPaused) {
+                    if (curMove < arrayOfObjects.length) {
+                        continuePrint();
+                    }
+                    else {
+                        // isPrinting = false;
+                        console.log("Print finished");
+                    }
+                }         
+
             }
             else {
                 requestAnimationFrame( updatePrintAnimation );
@@ -246,8 +253,8 @@ function continuePrint(row) {
         updatePrintAnimation();
     }
     else {
-        row++;
-        continuePrint(row);
+        curMove++;
+        continuePrint();
     }
 }
 
@@ -337,11 +344,11 @@ async function loadSTLFile (filePath) {
         const geometry = await loader.loadAsync(filePath);
         
         // load mesh into overlay scene
-        geometry.scale(5,5,5);
-        geometry.rotateZ(Math.PI/4);
-        const material = new THREE.MeshBasicMaterial({ color: 0xff5533 });
+        const material = new THREE.MeshLambertMaterial({ color: 0xffffff });
         const mesh = new THREE.Mesh(geometry, material);
         centerObject(mesh, overlayGridHelper);
+        mesh.castShadow = true; // Allow the object to cast shadows
+        mesh.receiveShadow = true; // Allow the object to receive shadows 
         overlayScene.add(mesh);
 
         // return geometry to main script
@@ -373,6 +380,9 @@ function resetPrint() {
     curPrintDistance = 0;
     curExtruded = 0;
     document.getElementById('extrusionCounterDisplay').textContent = Number(curExtruded).toFixed(5);
+    curLayer = "";
+    document.getElementById('currentLayerDisplay').textContent = curLayer;
+    document.getElementById('currentMoveDisplay').textContent = ""; 
     // listOfMoves = [];
     sortedPairs = [];
     arrayOfObjects = [];
@@ -380,11 +390,12 @@ function resetPrint() {
 
 async function startPrint() {
     // curPosition = new THREE.Vector3(0,0,0); // TODO remove
-    
+    isPaused = false;
+
     if(!isPrinting) {
         // Start print
         gCodeToArray();
-        continuePrint(curMove);
+        continuePrint();
         isPrinting = true;
     }
 
@@ -407,7 +418,8 @@ async function startPrint() {
 }
 
 function pausePrint() {
-
+    isPrinting = false;
+    isPaused = true;
 }
 
 function updatePrintColor() {
